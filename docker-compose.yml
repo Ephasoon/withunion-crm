@@ -16,10 +16,13 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       POSTGRES_DB: ${DB_NAME:-withunion_crm}
+    # Bound to loopback only, on a non-default host port, so the database is
+    # not reachable from other machines. The app talks to it over the Docker
+    # network; use this only for local psql access.
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_HOST_PORT:-5433}:5432"
     volumes:
       - withunion_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -41,10 +44,12 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-withunion_crm}
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:?Set DB_PASSWORD in .env}@postgres:5432/${DB_NAME:-withunion_crm}
       DIRECT_URL: ${DIRECT_URL:-}
 
-  # One-off initial data load. Kept out of `up` so it never overwrites data.
+  # One-off demo data load. Kept out of `up` so it does not run automatically.
+  # WARNING: it deletes ALL existing rows before inserting demo data; in
+  # production it also requires ALLOW_SEED_WIPE=true.
   seed:
     profiles: ["tools"]
     build:
@@ -60,9 +65,42 @@ services:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-withunion_crm}
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:?Set DB_PASSWORD in .env}@postgres:5432/${DB_NAME:-withunion_crm}
       DIRECT_URL: ${DIRECT_URL:-}
       DEMO_PASSWORD: "${DEMO_PASSWORD:?Set DEMO_PASSWORD in .env or the shell before seeding}"
+      ALLOW_SEED_WIPE: ${ALLOW_SEED_WIPE:-}
+
+  # Creates the first real owner without loading demo data.
+  #   docker compose run --rm create-owner
+  create-owner:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tools
+    command: ["npm", "run", "db:create-owner"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    stdin_open: true
+    tty: true
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:?Set DB_PASSWORD in .env}@postgres:5432/${DB_NAME:-withunion_crm}
+      DIRECT_URL: ${DIRECT_URL:-}
+      OWNER_EMAIL: ${OWNER_EMAIL:-}
+      OWNER_NAME: ${OWNER_NAME:-}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-}
+      ORG_SLUG: ${ORG_SLUG:-withunion}
+      ORG_NAME: ${ORG_NAME:-WithUnion Technologies}
+      ORG_CURRENCY: ${ORG_CURRENCY:-ETB}
+      ORG_COUNTRY: ${ORG_COUNTRY:-Ethiopia}
+      ORG_TIMEZONE: ${ORG_TIMEZONE:-Africa/Addis_Ababa}
+      ORG_TAX_RATE: ${ORG_TAX_RATE:-15}
+      ORG_COMMISSION_RATE: ${ORG_COMMISSION_RATE:-5}
 
   app:
     build:
@@ -79,7 +117,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-withunion_crm}
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:?Set DB_PASSWORD in .env}@postgres:5432/${DB_NAME:-withunion_crm}
       DIRECT_URL: ${DIRECT_URL:-}
       STORAGE_DIR: /app/storage/uploads
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-7}

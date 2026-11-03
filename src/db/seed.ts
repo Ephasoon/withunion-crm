@@ -1,8 +1,8 @@
 /**
  * Seeds the database with realistic Ethiopian business demo data.
  *
- * Safe to run repeatedly — it wipes existing rows first, so you always get a
- * clean, predictable dataset instead of duplicate-key errors.
+ * DESTRUCTIVE: every existing row is deleted before the demo data is written.
+ * In production this refuses to run unless ALLOW_SEED_WIPE=true is set.
  *
  * Usage:  npm run db:seed
  */
@@ -52,6 +52,24 @@ function assertSafeProductionPassword(): void {
   }
 }
 
+function assertSafeProductionWipe(): void {
+  if (!env.isProduction) return;
+
+  if (process.env.ALLOW_SEED_WIPE !== "true") {
+    throw new Error(
+      "Refusing to seed in production: this DELETES ALL EXISTING DATA " +
+        "(organizations, users, clients, deals, invoices, documents, sessions) " +
+        "before loading demo data. If that is really what you want, set " +
+        "ALLOW_SEED_WIPE=true and run it again."
+    );
+  }
+
+  console.warn(
+    "\n⚠️  WARNING: ALLOW_SEED_WIPE=true — every existing row will be DELETED " +
+      "and replaced with demo data. This cannot be undone.\n"
+  );
+}
+
 const days = (n: number) => new Date(Date.now() + n * 86_400_000);
 
 const monthStart = (offset: number) => {
@@ -94,11 +112,12 @@ async function clean() {
 }
 
 async function seed() {
+  assertSafeProductionWipe();
   assertSafeProductionPassword();
 
   console.log("\n🌱 WithUnion CRM — Seeding database\n");
 
-  console.log("   Clearing existing data…");
+  console.log("   ⚠️  Deleting all existing data…");
   await clean();
 
   // ── Organization ──────────────────────────────────────────────────────────

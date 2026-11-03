@@ -12,6 +12,7 @@
     "db:create": "tsx src/db/create-database.ts",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
+    "db:create-owner": "tsx scripts/create-owner.ts",
     "db:studio": "drizzle-kit studio",
     "db:reset": "npm run db:push && npm run db:seed",
     "check:isolation": "tsx scripts/check-isolation.ts",

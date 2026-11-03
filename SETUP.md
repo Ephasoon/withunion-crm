@@ -151,7 +151,8 @@ Then work through **`REVIEW.md`** to test every feature.
 | `npm run setup` | Create DB + schema + demo data |
 | `npm run db:create` | Create database only |
 | `npm run db:push` | Sync schema |
-| `npm run db:seed` | Reload demo data (safe to repeat) |
+| `npm run db:seed` | Reload demo data (deletes all existing rows) |
+| `npm run db:create-owner` | Create the first real owner without demo data |
 | `npm run db:reset` | Wipe and reseed |
 | `npm run db:studio` | Visual database browser |
 | `npm run typecheck` | TypeScript validation |
