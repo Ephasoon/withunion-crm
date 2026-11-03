@@ -433,6 +433,15 @@ export function InvoicesContent() {
                         </td>
                         <td className="py-3.5 px-4">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            <a
+                              href={`/api/invoices/${invoice.id}/pdf`}
+                              download
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all"
+                              title="Download PDF"
+                              aria-label={`Download PDF for ${invoice.invoiceNumber}`}
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
                             <button
                               onClick={() => setEditing(invoice)}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all"

@@ -53,7 +53,7 @@ const UUID_PATTERN =
   /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
 const PROBE_VALUE = "isolation-write-probe";
-const EXPECTED_WRITE_STATUSES = [403, 404];
+const EXPECTED_FOREIGN_STATUSES = [403, 404];
 
 type OrgFixtures = {
   leadId: string;
@@ -77,7 +77,7 @@ type ForeignMarkers = {
 
 type WriteAttempt = {
   label: string;
-  method: "PATCH" | "DELETE" | "POST";
+  method: "GET" | "PATCH" | "DELETE" | "POST";
   url: string;
   body?: unknown;
 };
@@ -421,6 +421,11 @@ async function verifyWriteActor(
       url: `${BASE_URL}/api/invoices/${fixtures.invoiceId}`,
     },
     {
+      label: "GET /api/invoices/[id]/pdf",
+      method: "GET",
+      url: `${BASE_URL}/api/invoices/${fixtures.invoiceId}/pdf`,
+    },
+    {
       label: "POST /api/leads/[id]/convert",
       method: "POST",
       url: `${BASE_URL}/api/leads/${fixtures.leadId}/convert`,
@@ -448,7 +453,7 @@ async function verifyWriteActor(
 
     const body = await res.text().catch(() => "");
 
-    if (!EXPECTED_WRITE_STATUSES.includes(res.status)) {
+    if (!EXPECTED_FOREIGN_STATUSES.includes(res.status)) {
       failures.push(
         `${attempt.label} — expected 403/404, got ${res.status}${body ? `: ${body.slice(0, 160)}` : ""}`
       );
