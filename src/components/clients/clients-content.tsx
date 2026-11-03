@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Search, Plus, Building2, Mail, Globe, Users,
-  MapPin, Download, Pencil, Trash2,
+  MapPin, Download, Pencil, Trash2, Paperclip,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatCurrency, INDUSTRIES } from "@/lib/utils";
+import { DocumentsModal } from "@/components/documents/documents-panel";
 
 type Client = {
   id: string;
@@ -177,6 +178,7 @@ export function ClientsContent() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [deleting, setDeleting] = useState<Client | null>(null);
+  const [documentsFor, setDocumentsFor] = useState<Client | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [pagination, setPagination] = useState({ total: 0, pages: 1 });
@@ -341,6 +343,14 @@ export function ClientsContent() {
                       <UserAvatar name={client.name} size="lg" />
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                         <button
+                          onClick={() => setDocumentsFor(client)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all"
+                          title="Documents"
+                          aria-label={`Documents for ${client.name}`}
+                        >
+                          <Paperclip className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => { setEditing(client); setShowForm(true); }}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all"
                           title="Edit client"
@@ -486,6 +496,14 @@ export function ClientsContent() {
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                             <button
+                              onClick={() => setDocumentsFor(client)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all"
+                              title="Documents"
+                              aria-label={`Documents for ${client.name}`}
+                            >
+                              <Paperclip className="w-4 h-4" />
+                            </button>
+                            <button
                               onClick={() => { setEditing(client); setShowForm(true); }}
                               className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all"
                               title="Edit client"
@@ -559,6 +577,14 @@ export function ClientsContent() {
           client={editing}
           onClose={() => { setShowForm(false); setEditing(null); }}
           onSaved={fetchClients}
+        />
+      )}
+
+      {documentsFor && (
+        <DocumentsModal
+          title={`Documents for ${documentsFor.name}`}
+          clientId={documentsFor.id}
+          onClose={() => setDocumentsFor(null)}
         />
       )}
 

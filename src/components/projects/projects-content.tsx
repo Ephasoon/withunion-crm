@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  FolderKanban, Plus, Pencil, Trash2,
+  FolderKanban, Plus, Pencil, Trash2, Paperclip,
   Clock, CheckCircle, AlertCircle, PauseCircle,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { DocumentsModal } from "@/components/documents/documents-panel";
 
 type Project = {
   id: string;
@@ -207,10 +208,12 @@ function ProjectCard({
   project,
   onEdit,
   onDelete,
+  onDocuments,
 }: {
   project: Project;
   onEdit: (project: Project) => void;
   onDelete: (project: Project) => void;
+  onDocuments: (project: Project) => void;
 }) {
   const config = STATUS_CONFIG[project.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.planning;
   const StatusIcon = config.icon;
@@ -236,6 +239,14 @@ function ProjectCard({
             )}
           </div>
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+            <button
+              onClick={() => onDocuments(project)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all"
+              title="Documents"
+              aria-label={`Documents for ${project.name}`}
+            >
+              <Paperclip className="w-4 h-4" />
+            </button>
             <button
               onClick={() => onEdit(project)}
               className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all"
@@ -333,6 +344,7 @@ export function ProjectsContent() {
   const [statusFilter, setStatusFilter] = useState("");
   const [editing, setEditing] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
+  const [documentsFor, setDocumentsFor] = useState<Project | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const fetchProjects = useCallback(async () => {
@@ -437,6 +449,7 @@ export function ProjectsContent() {
                 project={project}
                 onEdit={(item) => setEditing(item)}
                 onDelete={(item) => setDeleting(item)}
+                onDocuments={(item) => setDocumentsFor(item)}
               />
             ))}
       </div>
@@ -459,6 +472,14 @@ export function ProjectsContent() {
           project={editing}
           onClose={() => setEditing(null)}
           onSaved={fetchProjects}
+        />
+      )}
+
+      {documentsFor && (
+        <DocumentsModal
+          title={`Documents for ${documentsFor.name}`}
+          projectId={documentsFor.id}
+          onClose={() => setDocumentsFor(null)}
         />
       )}
 

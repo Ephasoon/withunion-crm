@@ -212,6 +212,11 @@ export const env = {
     commissionRate: optional("ORG_COMMISSION_RATE", "5"),
   },
 
+  // Local file storage for uploaded documents (kept outside public/)
+  storage: {
+    dir: optional("STORAGE_DIR", "./storage/uploads"),
+  },
+
   // Auth — opaque session tokens stored (hashed) in the sessions table
   auth: {
     sessionTtlDays: num("SESSION_TTL_DAYS", 7),

@@ -31,6 +31,11 @@ import {
   projects,
   users,
 } from "../src/db/schema";
+import {
+  deleteStoredFile,
+  readStoredFile,
+  saveBuffer,
+} from "../src/lib/storage";
 
 const BASE_URL = (process.env.ISOLATION_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const PRIMARY_SLUG = process.env.ORG_SLUG ?? "withunion";
@@ -41,6 +46,7 @@ const READ_ROUTES = [
   "/api/clients?limit=100",
   "/api/projects?limit=100",
   "/api/invoices?limit=100",
+  "/api/documents",
   "/api/commissions",
   "/api/dashboard",
   "/api/analytics?period=1y",
@@ -60,6 +66,8 @@ type OrgFixtures = {
   clientId: string;
   projectId: string;
   invoiceId: string;
+  documentId: string;
+  documentStoredName: string;
   leadName: string;
 };
 
@@ -68,6 +76,7 @@ type OrgSnapshot = {
   clients: (typeof clients.$inferSelect)[];
   projects: (typeof projects.$inferSelect)[];
   invoices: (typeof invoices.$inferSelect)[];
+  documents: (typeof documents.$inferSelect)[];
 };
 
 type ForeignMarkers = {
@@ -184,91 +193,120 @@ function collectUuids(value: unknown, found: Set<string>): void {
 async function createFixtures(org: OrgContext): Promise<OrgFixtures> {
   const suffix = randomUUID();
   const leadName = `Isolation Check Lead ${suffix}`;
+  const documentName = `Isolation Check Document ${suffix}.pdf`;
+  const documentBytes = Buffer.from(`%PDF-1.4\n% Isolation check ${suffix}\n`);
+  const documentStoredName = await saveBuffer(documentBytes, ".pdf");
 
-  return db.transaction(async (tx) => {
-    const [client] = await tx
-      .insert(clients)
-      .values({
-        organizationId: org.id,
-        name: `Isolation Check Client ${suffix}`,
-        email: `isolation-${suffix}@example.com`,
-        notes: "Temporary fixture for isolation write checks",
-        tags: ["isolation-check", "temporary"],
-      })
-      .returning();
+  try {
+    return await db.transaction(async (tx) => {
+      const [client] = await tx
+        .insert(clients)
+        .values({
+          organizationId: org.id,
+          name: `Isolation Check Client ${suffix}`,
+          email: `isolation-${suffix}@example.com`,
+          notes: "Temporary fixture for isolation write checks",
+          tags: ["isolation-check", "temporary"],
+        })
+        .returning();
 
-    const [lead] = await tx
-      .insert(leads)
-      .values({
-        organizationId: org.id,
-        name: leadName,
-        email: `isolation-${suffix}@example.com`,
-        status: "new",
-        stage: "lead",
-        score: 10,
-        value: "1000",
-        notes: "Temporary fixture for isolation write checks",
-        tags: ["isolation-check", "temporary"],
-      })
-      .returning();
+      const [lead] = await tx
+        .insert(leads)
+        .values({
+          organizationId: org.id,
+          name: leadName,
+          email: `isolation-${suffix}@example.com`,
+          status: "new",
+          stage: "lead",
+          score: 10,
+          value: "1000",
+          notes: "Temporary fixture for isolation write checks",
+          tags: ["isolation-check", "temporary"],
+        })
+        .returning();
 
-    const [project] = await tx
-      .insert(projects)
-      .values({
-        organizationId: org.id,
+      const [project] = await tx
+        .insert(projects)
+        .values({
+          organizationId: org.id,
+          clientId: client.id,
+          name: `Isolation Check Project ${suffix}`,
+          description: "Temporary fixture for isolation write checks",
+          status: "planning",
+          budget: "1000",
+          spent: "0",
+          progress: 0,
+          tags: ["isolation-check", "temporary"],
+        })
+        .returning();
+
+      const [invoice] = await tx
+        .insert(invoices)
+        .values({
+          organizationId: org.id,
+          clientId: client.id,
+          invoiceNumber: `ISO-CHECK-${suffix}`,
+          status: "draft",
+          subtotal: "1000",
+          taxRate: "15",
+          taxAmount: "150",
+          total: "1150",
+          currency: "ETB",
+          notes: "Temporary fixture for isolation write checks",
+          lineItems: [],
+        })
+        .returning();
+
+      const [document] = await tx
+        .insert(documents)
+        .values({
+          organizationId: org.id,
+          name: documentName,
+          type: "pdf",
+          url: documentStoredName,
+          size: documentBytes.length,
+          mimeType: "application/pdf",
+          clientId: client.id,
+          projectId: project.id,
+          metadata: { originalName: documentName },
+        })
+        .returning();
+
+      return {
+        leadId: lead.id,
         clientId: client.id,
-        name: `Isolation Check Project ${suffix}`,
-        description: "Temporary fixture for isolation write checks",
-        status: "planning",
-        budget: "1000",
-        spent: "0",
-        progress: 0,
-        tags: ["isolation-check", "temporary"],
-      })
-      .returning();
-
-    const [invoice] = await tx
-      .insert(invoices)
-      .values({
-        organizationId: org.id,
-        clientId: client.id,
-        invoiceNumber: `ISO-CHECK-${suffix}`,
-        status: "draft",
-        subtotal: "1000",
-        taxRate: "15",
-        taxAmount: "150",
-        total: "1150",
-        currency: "ETB",
-        notes: "Temporary fixture for isolation write checks",
-        lineItems: [],
-      })
-      .returning();
-
-    return {
-      leadId: lead.id,
-      clientId: client.id,
-      projectId: project.id,
-      invoiceId: invoice.id,
-      leadName,
-    };
-  });
+        projectId: project.id,
+        invoiceId: invoice.id,
+        documentId: document.id,
+        documentStoredName,
+        leadName,
+      };
+    });
+  } catch (error) {
+    await deleteStoredFile(documentStoredName).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function deleteFixtures(fixtures: OrgFixtures): Promise<void> {
   await db.transaction(async (tx) => {
+    await tx.delete(documents).where(eq(documents.id, fixtures.documentId));
     await tx.delete(invoices).where(eq(invoices.id, fixtures.invoiceId));
     await tx.delete(projects).where(eq(projects.id, fixtures.projectId));
     await tx.delete(leads).where(eq(leads.id, fixtures.leadId));
     await tx.delete(clients).where(eq(clients.id, fixtures.clientId));
   });
+
+  await deleteStoredFile(fixtures.documentStoredName).catch(() => undefined);
 }
 
 async function snapshotOrg(orgId: string): Promise<OrgSnapshot> {
-  const [leadRows, clientRows, projectRows, invoiceRows] = await Promise.all([
+  const [leadRows, clientRows, projectRows, invoiceRows, documentRows] = await Promise.all([
     db.select().from(leads).where(eq(leads.organizationId, orgId)).orderBy(leads.id),
     db.select().from(clients).where(eq(clients.organizationId, orgId)).orderBy(clients.id),
     db.select().from(projects).where(eq(projects.organizationId, orgId)).orderBy(projects.id),
     db.select().from(invoices).where(eq(invoices.organizationId, orgId)).orderBy(invoices.id),
+    db.select().from(documents).where(eq(documents.organizationId, orgId)).orderBy(documents.id),
   ]);
 
   return {
@@ -276,12 +314,13 @@ async function snapshotOrg(orgId: string): Promise<OrgSnapshot> {
     clients: clientRows,
     projects: projectRows,
     invoices: invoiceRows,
+    documents: documentRows,
   };
 }
 
 function diffSnapshots(label: string, before: OrgSnapshot, after: OrgSnapshot): string[] {
   const failures: string[] = [];
-  const tables = ["leads", "clients", "projects", "invoices"] as const;
+  const tables = ["leads", "clients", "projects", "invoices", "documents"] as const;
 
   for (const table of tables) {
     if (JSON.stringify(before[table]) !== JSON.stringify(after[table])) {
@@ -426,6 +465,26 @@ async function verifyWriteActor(
       url: `${BASE_URL}/api/invoices/${fixtures.invoiceId}/pdf`,
     },
     {
+      label: "GET /api/documents?clientId=[foreign]",
+      method: "GET",
+      url: `${BASE_URL}/api/documents?clientId=${fixtures.clientId}`,
+    },
+    {
+      label: "GET /api/documents?projectId=[foreign]",
+      method: "GET",
+      url: `${BASE_URL}/api/documents?projectId=${fixtures.projectId}`,
+    },
+    {
+      label: "GET /api/documents/[id]",
+      method: "GET",
+      url: `${BASE_URL}/api/documents/${fixtures.documentId}`,
+    },
+    {
+      label: "DELETE /api/documents/[id]",
+      method: "DELETE",
+      url: `${BASE_URL}/api/documents/${fixtures.documentId}`,
+    },
+    {
       label: "POST /api/leads/[id]/convert",
       method: "POST",
       url: `${BASE_URL}/api/leads/${fixtures.leadId}/convert`,
@@ -460,6 +519,27 @@ async function verifyWriteActor(
     } else {
       console.log(`   ✓ ${attempt.label} → ${res.status}`);
     }
+  }
+
+  const documentFile = await readStoredFile(fixtures.documentStoredName);
+  if (!documentFile) {
+    failures.push(
+      "Document isolation - the foreign document file was removed from storage"
+    );
+  } else {
+    console.log("   OK document file still present after cross-org attempts");
+  }
+
+  const [documentRow] = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(eq(documents.id, fixtures.documentId))
+    .limit(1);
+
+  if (!documentRow) {
+    failures.push(
+      "Document isolation - the foreign document row was deleted"
+    );
   }
 
   failures.push(...(await verifyAiChat(cookie, foreign)));

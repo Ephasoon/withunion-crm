@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
   // Keep the native `pg` driver out of the client bundle.
   serverExternalPackages: ["pg"],
 
+  // Route handlers read the full multipart body so they can reject files over
+  // 10 MB with a clear 413 instead of receiving a truncated body from proxy.
+  experimental: {
+    proxyClientMaxBodySize: "12mb",
+  },
+
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.pexels.com" },
