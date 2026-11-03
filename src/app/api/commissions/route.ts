@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { commissions, deals, users } from "@/db/schema";
-import { and, desc, eq, sql, sum } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql, sum } from "drizzle-orm";
 import { requireApiUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -108,6 +108,38 @@ export async function GET(req: NextRequest) {
           .where(eq(commissions.organizationId, orgId)),
       ]);
 
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const currentDay = now.getDate();
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const daysInPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+    const previousRangeEnd = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      Math.min(currentDay, daysInPreviousMonth) + 1
+    );
+
+    const [currentMonthRows, previousMonthRows] = await Promise.all([
+      db
+        .select({ total: sum(commissions.amount) })
+        .from(commissions)
+        .where(
+          and(
+            eq(commissions.organizationId, orgId),
+            gte(commissions.createdAt, currentMonthStart)
+          )
+        ),
+      db
+        .select({ total: sum(commissions.amount) })
+        .from(commissions)
+        .where(
+          and(
+            eq(commissions.organizationId, orgId),
+            gte(commissions.createdAt, previousMonthStart),
+            lt(commissions.createdAt, previousRangeEnd)
+          )
+        ),
+    ]);
+
     const totalsByMonth = new Map<string, number>();
     for (const row of trendRows) {
       if (!row.month) continue;
@@ -130,10 +162,14 @@ export async function GET(req: NextRequest) {
         amount: totalsByMonth.get(key) ?? 0,
       }));
 
-    const previous = trend[trend.length - 2]?.amount ?? 0;
-    const current = trend[trend.length - 1]?.amount ?? 0;
+    const currentRange = parseFloat(currentMonthRows[0]?.total ?? "0");
+    const previousRange = parseFloat(previousMonthRows[0]?.total ?? "0");
+    // Compare the same 1..N day window of the previous month. Hide the delta
+    // while the current month is still too young to be meaningful.
     const growthPct =
-      previous > 0 ? Math.round(((current - previous) / previous) * 1000) / 10 : null;
+      currentDay < 7 || previousRange <= 0
+        ? null
+        : Math.round(((currentRange - previousRange) / previousRange) * 1000) / 10;
 
     const sortedLeaderboard = leaderboard
       .map((row) => ({

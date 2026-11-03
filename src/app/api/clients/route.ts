@@ -27,8 +27,9 @@ export async function GET(req: NextRequest) {
     if (!auth.ok) return auth.response;
 
     const { searchParams } = new URL(req.url);
-    const search = searchParams.get("search") ?? "";
+    const search = searchParams.get("search")?.slice(0, 120) ?? "";
     const industry = searchParams.get("industry");
+    const city = searchParams.get("city");
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1") || 1);
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20") || 20));
     const offset = (page - 1) * limit;
@@ -46,6 +47,9 @@ export async function GET(req: NextRequest) {
     if (industry) {
       conditions.push(ilike(clients.industry, `%${industry}%`));
     }
+    if (city) {
+      conditions.push(ilike(clients.city, `%${city}%`));
+    }
 
     const [data, total] = await Promise.all([
       db
@@ -56,12 +60,17 @@ export async function GET(req: NextRequest) {
           phone: clients.phone,
           company: clients.company,
           industry: clients.industry,
+          website: clients.website,
+          address: clients.address,
           city: clients.city,
+          notes: clients.notes,
           tags: clients.tags,
           totalRevenue: clients.totalRevenue,
           totalProjects: clients.totalProjects,
           isActive: clients.isActive,
+          assignedToId: clients.assignedToId,
           createdAt: clients.createdAt,
+          updatedAt: clients.updatedAt,
           assignedToName: users.name,
           assignedToAvatar: users.avatar,
         })

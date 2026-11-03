@@ -15,9 +15,8 @@ export function proxy(req: NextRequest) {
   }
 
   if (pathname === "/login") {
-    if (hasSession) {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
-    }
+    // Validity is checked against the database by the login page itself.
+    // Redirecting here on cookie presence alone loops with requireUser().
     return NextResponse.next();
   }
 

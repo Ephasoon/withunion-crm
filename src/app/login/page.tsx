@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
+import { getCurrentUser, SESSION_COOKIE } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Sign in — WithUnion CRM",
@@ -19,5 +22,15 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string | string[] }>;
 }) {
   const { next } = await searchParams;
+
+  // Only skip the form when the cookie maps to a live session row.
+  const user = await getCurrentUser();
+  if (user) redirect("/dashboard");
+
+  // A cookie that no longer resolves to a session must be cleared; otherwise
+  // the proxy and protected pages can bounce the user back here forever.
+  const hasStaleCookie = Boolean((await cookies()).get(SESSION_COOKIE)?.value);
+  if (hasStaleCookie) redirect("/api/auth/logout");
+
   return <LoginForm next={safeNext(next)} />;
 }

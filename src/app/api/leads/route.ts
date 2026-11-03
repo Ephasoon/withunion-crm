@@ -30,8 +30,10 @@ export async function GET(req: NextRequest) {
     if (!auth.ok) return auth.response;
 
     const { searchParams } = new URL(req.url);
-    const search = searchParams.get("search") ?? "";
+    const search = searchParams.get("search")?.slice(0, 120) ?? "";
     const stage = searchParams.get("stage");
+    const source = searchParams.get("source");
+    const status = searchParams.get("status");
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1") || 1);
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20") || 20));
     const offset = (page - 1) * limit;
@@ -54,6 +56,18 @@ export async function GET(req: NextRequest) {
       }
       conditions.push(eq(leads.stage, parsed.data));
     }
+    if (source) {
+      conditions.push(eq(leads.source, source));
+    }
+    if (status) {
+      const parsed = z
+        .enum(["new", "contacted", "qualified", "unqualified", "converted"])
+        .safeParse(status);
+      if (!parsed.success) {
+        return NextResponse.json({ error: "Invalid status filter" }, { status: 400 });
+      }
+      conditions.push(eq(leads.status, parsed.data));
+    }
 
     const [data, total] = await Promise.all([
       db
@@ -69,9 +83,14 @@ export async function GET(req: NextRequest) {
           stage: leads.stage,
           score: leads.score,
           value: leads.value,
+          notes: leads.notes,
           tags: leads.tags,
           nextFollowUp: leads.nextFollowUp,
+          assignedToId: leads.assignedToId,
+          convertedClientId: leads.convertedClientId,
+          convertedAt: leads.convertedAt,
           createdAt: leads.createdAt,
+          updatedAt: leads.updatedAt,
           assignedToName: users.name,
           assignedToAvatar: users.avatar,
         })

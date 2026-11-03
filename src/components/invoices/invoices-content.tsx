@@ -1,10 +1,23 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { FileText, Plus, Send, CheckCircle, Clock, AlertTriangle, XCircle, Eye, Download } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  FileText, Plus, Send, CheckCircle, Clock, AlertTriangle, XCircle, Eye,
+  Download, Pencil, Trash2,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 
 type Invoice = {
@@ -12,13 +25,20 @@ type Invoice = {
   invoiceNumber: string;
   status: string;
   subtotal: string | null;
+  taxRate: string | null;
   taxAmount: string | null;
+  discount: string | null;
   total: string | null;
   currency: string | null;
+  notes: string | null;
+  terms: string | null;
   issueDate: string | null;
   dueDate: string | null;
   paidAt: string | null;
+  clientId: string;
+  projectId: string | null;
   createdAt: string;
+  updatedAt: string;
   clientName: string | null;
   clientCompany: string | null;
   clientEmail: string | null;
@@ -38,26 +58,217 @@ function daysFromNow(date: string): number {
   return Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
 }
 
+function dateInputValue(value: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+function InvoiceFormModal({
+  invoice,
+  onClose,
+  onSaved,
+}: {
+  invoice: Invoice;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    invoiceNumber: invoice.invoiceNumber,
+    status: invoice.status,
+    issueDate: dateInputValue(invoice.issueDate),
+    dueDate: dateInputValue(invoice.dueDate),
+    subtotal: invoice.subtotal ?? "0",
+    taxRate: invoice.taxRate ?? "0",
+    taxAmount: invoice.taxAmount ?? "0",
+    discount: invoice.discount ?? "0",
+    total: invoice.total ?? "0",
+    notes: invoice.notes ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        invoiceNumber: form.invoiceNumber,
+        status: form.status,
+        issueDate: form.issueDate ? new Date(form.issueDate).toISOString() : "",
+        dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : "",
+        subtotal: form.subtotal === "" ? 0 : Number(form.subtotal),
+        taxRate: form.taxRate === "" ? 0 : Number(form.taxRate),
+        taxAmount: form.taxAmount === "" ? 0 : Number(form.taxAmount),
+        discount: form.discount === "" ? 0 : Number(form.discount),
+        total: form.total === "" ? 0 : Number(form.total),
+        notes: form.notes,
+      };
+
+      const res = await fetch(`/api/invoices/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? "Unable to save invoice");
+      }
+
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save invoice");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Edit Invoice</h2>
+            <p className="text-xs text-slate-500 mt-0.5">{invoice.clientName ?? "Client"}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+              {error}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Invoice Number *</label>
+              <Input required value={form.invoiceNumber} onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Status</label>
+              <select
+                className="w-full h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+              >
+                {Object.entries(STATUS_CONFIG).map(([id, config]) => (
+                  <option key={id} value={id}>{config.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Issue Date</label>
+              <Input type="date" value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Due Date</label>
+              <Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Subtotal</label>
+              <Input type="number" value={form.subtotal} onChange={(e) => setForm({ ...form, subtotal: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Tax Rate (%)</label>
+              <Input type="number" value={form.taxRate} onChange={(e) => setForm({ ...form, taxRate: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Tax Amount</label>
+              <Input type="number" value={form.taxAmount} onChange={(e) => setForm({ ...form, taxAmount: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Discount</label>
+              <Input type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Total</label>
+              <Input type="number" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Notes</label>
+              <textarea
+                rows={3}
+                className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={saving}>Save Changes</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function InvoicesContent() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [summary, setSummary] = useState({ totalRevenue: 0 });
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, pages: 1 });
+  const [editing, setEditing] = useState<Invoice | null>(null);
+  const [deleting, setDeleting] = useState<Invoice | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const fetchInvoices = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ page: String(page) });
+      if (statusFilter) params.set("status", statusFilter);
+
+      const res = await fetch(`/api/invoices?${params}`);
+      if (!res.ok) throw new Error("Failed to load invoices");
+      const data = await res.json();
+      setInvoices(data.data ?? []);
+      setSummary(data.summary ?? { totalRevenue: 0 });
+      setPagination(data.pagination ?? { total: 0, pages: 1 });
+    } catch {
+      setError("Failed to load invoices. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, page]);
 
   useEffect(() => {
-    const params = new URLSearchParams({ page: String(page), ...(statusFilter && { status: statusFilter }) });
-    fetch(`/api/invoices?${params}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setInvoices(d.data ?? []);
-        setSummary(d.summary ?? { totalRevenue: 0 });
-        setPagination(d.pagination ?? { total: 0, pages: 1 });
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [statusFilter, page]);
+    const timer = setTimeout(fetchInvoices, 0);
+    return () => clearTimeout(timer);
+  }, [fetchInvoices]);
+
+  const changeStatus = (value: string) => {
+    setStatusFilter(value);
+    setPage(1);
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    const target = deleting;
+    setBusyId(target.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/invoices/${target.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? "Unable to delete invoice");
+      }
+      setDeleting(null);
+      await fetchInvoices();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete invoice");
+      setDeleting(null);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const getStatusDaysLabel = (invoice: Invoice) => {
     if (invoice.status === "paid" && invoice.paidAt) {
@@ -73,7 +284,6 @@ export function InvoicesContent() {
     return null;
   };
 
-  const totalPaid = invoices.filter(i => i.status === "paid").reduce((sum, i) => sum + parseFloat(i.total ?? "0"), 0);
   const totalPending = invoices.filter(i => ["sent", "viewed"].includes(i.status)).reduce((sum, i) => sum + parseFloat(i.total ?? "0"), 0);
   const totalOverdue = invoices.filter(i => i.status === "overdue").reduce((sum, i) => sum + parseFloat(i.total ?? "0"), 0);
 
@@ -96,6 +306,12 @@ export function InvoicesContent() {
           </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -128,10 +344,7 @@ export function InvoicesContent() {
         {[{ id: "", label: "All" }, ...Object.entries(STATUS_CONFIG).map(([id, c]) => ({ id, label: c.label }))].map(({ id, label }) => (
           <button
             key={id}
-            onClick={() => {
-              setLoading(true);
-              setStatusFilter(id);
-            }}
+            onClick={() => changeStatus(id)}
             className={cn(
               "px-3 py-1 rounded-full text-xs font-medium transition-colors",
               statusFilter === id
@@ -161,7 +374,7 @@ export function InvoicesContent() {
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
               {loading
-                ? Array(4).fill(null).map((_, i) => (
+                ? Array(6).fill(null).map((_, i) => (
                     <tr key={i}>
                       {Array(6).fill(null).map((_, j) => (
                         <td key={j} className="py-4 px-4">
@@ -219,13 +432,23 @@ export function InvoicesContent() {
                           )}
                         </td>
                         <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                            <Button variant="ghost" size="icon-sm">
-                              <Eye className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon-sm">
-                              <Send className="w-3.5 h-3.5" />
-                            </Button>
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            <button
+                              onClick={() => setEditing(invoice)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all"
+                              title="Edit invoice"
+                              aria-label={`Edit ${invoice.invoiceNumber}`}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setDeleting(invoice)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                              title="Delete invoice"
+                              aria-label={`Delete ${invoice.invoiceNumber}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -236,15 +459,73 @@ export function InvoicesContent() {
           {!loading && invoices.length === 0 && (
             <div className="text-center py-16">
               <FileText className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-              <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">No invoices yet</h3>
-              <p className="text-sm text-slate-500 mt-1">Create your first invoice to start tracking payments</p>
+              <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300">No invoices found</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                {statusFilter ? "Try a different status filter" : "Create your first invoice to start tracking payments"}
+              </p>
               <Button className="mt-4">
                 <Plus className="w-4 h-4" /> Create Invoice
               </Button>
             </div>
           )}
         </div>
+
+        {pagination.pages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-800">
+            <span className="text-sm text-slate-500">
+              Showing {invoices.length} of {pagination.total} invoices
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page === 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-slate-600 px-2">{page} / {pagination.pages}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(Math.min(pagination.pages, page + 1))}
+                disabled={page === pagination.pages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
+
+      {editing && (
+        <InvoiceFormModal
+          invoice={editing}
+          onClose={() => setEditing(null)}
+          onSaved={fetchInvoices}
+        />
+      )}
+
+      <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => { if (!open) setDeleting(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this invoice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleting ? `Invoice ${deleting.invoiceNumber} will be permanently removed. This action cannot be undone.` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busyId === deleting?.id}>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              loading={busyId === deleting?.id}
+              onClick={handleDelete}
+            >
+              Delete invoice
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

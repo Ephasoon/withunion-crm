@@ -786,9 +786,141 @@ async function seed() {
 
   console.log("✅ AI insights: 2");
 
+  // ── Second organization (isolation checks) ────────────────────────────────
+  // Kept separate from the demo org above so the main demo dataset is unchanged.
+  const [org2] = await db
+    .insert(organizations)
+    .values({
+      name: "Blue Sky Consulting",
+      slug: "bluesky",
+      industry: "Consulting",
+      email: "hello@blueskyconsulting.com",
+      phone: "+251922000000",
+      website: "https://blueskyconsulting.com",
+      address: "Kazanchis, Bole Sub-city",
+      city: "Addis Ababa",
+      country: "Ethiopia",
+      currency: "ETB",
+      timezone: "Africa/Addis_Ababa",
+      taxRate: "15",
+      commissionRate: "7",
+      plan: "starter",
+    })
+    .returning();
+
+  const [org2Admin] = await db
+    .insert(users)
+    .values({
+      organizationId: org2.id,
+      name: "Meron Tesfaye",
+      email: "admin@blueskyconsulting.com",
+      role: "admin",
+      title: "Operations Admin",
+      department: "Operations",
+      phone: "+251922000001",
+      passwordHash: demoPasswordHash,
+    })
+    .returning();
+
+  const org2Clients = await db
+    .insert(clients)
+    .values([
+      {
+        organizationId: org2.id,
+        name: "Fikru Alemu",
+        email: "fikru@blueskyclient.com",
+        company: "Skyline Trading",
+        industry: "Retail",
+        phone: "+251922000002",
+        city: "Addis Ababa",
+        totalRevenue: "125000",
+        totalProjects: 1,
+        assignedToId: org2Admin.id,
+        tags: ["isolation", "client"],
+        createdAt: days(-30),
+      },
+      {
+        organizationId: org2.id,
+        name: "Genet Bekele",
+        email: "genet@blueskyclient.com",
+        company: "Green Valley Farms",
+        industry: "Agriculture",
+        phone: "+251922000003",
+        city: "Adama",
+        totalRevenue: "98000",
+        totalProjects: 1,
+        assignedToId: org2Admin.id,
+        tags: ["isolation", "client"],
+        createdAt: days(-14),
+      },
+    ])
+    .returning();
+
+  const org2Leads = await db
+    .insert(leads)
+    .values([
+      {
+        organizationId: org2.id,
+        name: "Bereket Haile",
+        email: "bereket@blueskylead.com",
+        phone: "+251922000004",
+        company: "Blue Horizon Logistics",
+        industry: "Logistics",
+        source: "Referral",
+        status: "contacted",
+        stage: "meeting",
+        score: 64,
+        value: "210000",
+        assignedToId: org2Admin.id,
+        notes: "Second-org isolation lead",
+        tags: ["isolation", "lead"],
+        createdAt: days(-12),
+      },
+      {
+        organizationId: org2.id,
+        name: "Tsehay Mulu",
+        email: "tsehay@blueskylead.com",
+        phone: "+251922000005",
+        company: "Mulu Design Studio",
+        industry: "Agency",
+        source: "Website",
+        status: "qualified",
+        stage: "proposal",
+        score: 72,
+        value: "150000",
+        assignedToId: org2Admin.id,
+        notes: "Second-org isolation lead",
+        tags: ["isolation", "lead"],
+        createdAt: days(-7),
+      },
+      {
+        organizationId: org2.id,
+        name: "Nahom Girma",
+        email: "nahom@blueskylead.com",
+        phone: "+251922000006",
+        company: "Girma Foods",
+        industry: "Manufacturing",
+        source: "Cold Call",
+        status: "new",
+        stage: "lead",
+        score: 41,
+        value: "75000",
+        assignedToId: org2Admin.id,
+        notes: "Second-org isolation lead",
+        tags: ["isolation", "lead"],
+        createdAt: days(-3),
+      },
+    ])
+    .returning();
+
+  console.log(`✅ Second organization: ${org2.name}`);
+  console.log(`✅ Second org admin: ${org2Admin.email}`);
+  console.log(`✅ Second org clients: ${org2Clients.length}`);
+  console.log(`✅ Second org leads: ${org2Leads.length}`);
+
   console.log("\n🎉 Database seeded successfully!\n");
   console.log("   Organization   WithUnion Technologies");
-  console.log("   Users          4");
+  console.log("   Users          4 + 1 (Blue Sky Consulting)");
   console.log("   Clients        5");
   console.log("   Leads          5");
   console.log("   Deals          5");
@@ -804,6 +936,7 @@ async function seed() {
   console.log("   tigist@withunion.com  manager");
   console.log("   dawit@withunion.com   sales_rep");
   console.log("   sara@withunion.com    sales_rep");
+  console.log("   admin@blueskyconsulting.com  admin (Blue Sky Consulting)");
   console.log(`   Password: ${env.auth.demoPassword}`);
   console.log("\n👉 Next step:  npm run dev\n");
 }
