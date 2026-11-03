@@ -1,21 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { destroySession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Clears an invalid/expired session cookie, then sends the user to the login
- * page. Used by the login page when a cookie exists but no session row does.
+ * Revokes the current session. POST-only so a bare cross-site link cannot log
+ * the user out. The login page clears stale cookies through this endpoint too.
  */
-export async function GET(req: NextRequest) {
-  try {
-    await destroySession();
-  } catch (error) {
-    console.error("GET /api/auth/logout", error);
-  }
-  return NextResponse.redirect(new URL("/login", req.url));
-}
-
 export async function POST() {
   try {
     await destroySession();

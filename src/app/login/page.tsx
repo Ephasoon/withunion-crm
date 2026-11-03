@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
+import { StaleSessionCleanup } from "@/components/auth/stale-session-cleanup";
 import { getCurrentUser, SESSION_COOKIE } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -29,8 +30,14 @@ export default async function LoginPage({
 
   // A cookie that no longer resolves to a session must be cleared; otherwise
   // the proxy and protected pages can bounce the user back here forever.
+  // Clearing uses POST so a cross-site GET link cannot sign the user out.
   const hasStaleCookie = Boolean((await cookies()).get(SESSION_COOKIE)?.value);
-  if (hasStaleCookie) redirect("/api/auth/logout");
+  if (hasStaleCookie) return <StaleSessionCleanup />;
 
-  return <LoginForm next={safeNext(next)} />;
+  return (
+    <LoginForm
+      next={safeNext(next)}
+      showDemoHint={process.env.NODE_ENV !== "production"}
+    />
+  );
 }

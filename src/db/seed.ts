@@ -41,6 +41,17 @@ const ORG = {
   commissionRate: process.env.ORG_COMMISSION_RATE ?? "5",
 };
 
+const DEFAULT_DEMO_PASSWORD = "Withunion2024!";
+
+function assertSafeProductionPassword(): void {
+  if (env.isProduction && env.auth.demoPassword === DEFAULT_DEMO_PASSWORD) {
+    throw new Error(
+      "Refusing to seed in production with the default DEMO_PASSWORD. " +
+        "Set DEMO_PASSWORD to a strong, unique value before seeding."
+    );
+  }
+}
+
 const days = (n: number) => new Date(Date.now() + n * 86_400_000);
 
 const monthStart = (offset: number) => {
@@ -83,6 +94,8 @@ async function clean() {
 }
 
 async function seed() {
+  assertSafeProductionPassword();
+
   console.log("\n🌱 WithUnion CRM — Seeding database\n");
 
   console.log("   Clearing existing data…");
@@ -937,7 +950,11 @@ async function seed() {
   console.log("   dawit@withunion.com   sales_rep");
   console.log("   sara@withunion.com    sales_rep");
   console.log("   admin@blueskyconsulting.com  admin (Blue Sky Consulting)");
-  console.log(`   Password: ${env.auth.demoPassword}`);
+  if (env.isProduction) {
+    console.log("   Password: configured via DEMO_PASSWORD");
+  } else {
+    console.log(`   Password: ${env.auth.demoPassword}`);
+  }
   console.log("\n👉 Next step:  npm run dev\n");
 }
 

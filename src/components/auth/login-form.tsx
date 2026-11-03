@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Eye, EyeOff, Loader2, Lock, LogIn, Mail, Zap } from "lucide-react";
 
-export function LoginForm({ next }: { next: string }) {
+export function LoginForm({
+  next,
+  showDemoHint,
+}: {
+  next: string;
+  showDemoHint: boolean;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -138,11 +144,13 @@ export function LoginForm({ next }: { next: string }) {
           </form>
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
-          Demo account: <span className="font-medium text-slate-700 dark:text-slate-300">abebe@withunion.com</span>
-          {" · "}
-          <span className="font-medium text-slate-700 dark:text-slate-300">Withunion2024!</span>
-        </p>
+        {showDemoHint && (
+          <p className="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
+            Demo account: <span className="font-medium text-slate-700 dark:text-slate-300">abebe@withunion.com</span>
+            {" · "}
+            <span className="font-medium text-slate-700 dark:text-slate-300">Withunion2024!</span>
+          </p>
+        )}
       </div>
     </main>
   );

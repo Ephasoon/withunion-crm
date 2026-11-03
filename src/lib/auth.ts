@@ -152,5 +152,11 @@ export async function destroySession(): Promise<void> {
     await db.delete(sessions).where(eq(sessions.token, hashToken(token)));
   }
 
-  store.delete({ name: SESSION_COOKIE, path: "/" });
+  store.set(SESSION_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: env.isProduction,
+    path: "/",
+    maxAge: 0,
+  });
 }
