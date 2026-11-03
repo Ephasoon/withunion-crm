@@ -1,6 +1,6 @@
 # ════════════════════════════════════════════════════════════
 #  WithUnion CRM — Production Docker image
-#  Multi-stage build → final image ~180 MB
+#  Multi-stage build → standalone Next.js runtime
 #  Deploy target: Coolify, Fly.io, Railway, Render, any VPS
 # ════════════════════════════════════════════════════════════
 
@@ -29,7 +29,21 @@ ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 RUN npm run build
 
 
-# ─── Stage 3: minimal runtime image ─────────────────────────
+# ─── Stage 3: migration / seed tooling (not shipped at runtime) ───
+# Has dev dependencies (drizzle-kit, tsx) and the source needed to run
+# `db:push` / `db:seed` against the configured database.
+FROM deps AS tools
+WORKDIR /app
+
+COPY tsconfig.json drizzle.config.ts ./
+COPY src ./src
+
+ENV NEXT_TELEMETRY_DISABLED=1
+
+CMD ["npm", "run", "db:push"]
+
+
+# ─── Stage 4: minimal runtime image ─────────────────────────
 FROM node:22-alpine AS runner
 WORKDIR /app
 
@@ -37,9 +51,12 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+ENV STORAGE_DIR=/app/storage/uploads
 
 RUN addgroup --system --gid 1001 nodejs \
- && adduser  --system --uid 1001 nextjs
+ && adduser  --system --uid 1001 nextjs \
+ && mkdir -p /app/storage/uploads \
+ && chown -R nextjs:nodejs /app/storage
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

@@ -1,10 +1,12 @@
 # ════════════════════════════════════════════════════════════
 #  WithUnion CRM — Local full stack (app + PostgreSQL)
 #
-#  Start:   docker compose up -d
-#  Setup:   docker compose exec app npm run db:push && docker compose exec app npm run db:seed
+#  Start:   docker compose up -d --build
+#  Seed:    docker compose run --rm seed
 #  Logs:    docker compose logs -f app
 #  Stop:    docker compose down
+#
+#  DEMO_PASSWORD must be set in .env (or the shell) before seeding.
 # ════════════════════════════════════════════════════════════
 
 services:
@@ -26,26 +28,75 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
+  # Applies the current Drizzle schema before the app starts.
+  migrate:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: withunion-app
-    restart: unless-stopped
+      target: tools
+    command: ["npm", "run", "db:push"]
+    restart: "no"
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-withunion_crm}
+      DIRECT_URL: ${DIRECT_URL:-}
+
+  # One-off initial data load. Kept out of `up` so it never overwrites data.
+  seed:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tools
+    command: ["npm", "run", "db:seed"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-withunion_crm}
+      DIRECT_URL: ${DIRECT_URL:-}
+      DEMO_PASSWORD: "${DEMO_PASSWORD:?Set DEMO_PASSWORD in .env or the shell before seeding}"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: withunion-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-withunion_crm}
-      JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me_too}
+      DIRECT_URL: ${DIRECT_URL:-}
+      STORAGE_DIR: /app/storage/uploads
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-7}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ORG_NAME: ${ORG_NAME:-WithUnion Technologies}
       ORG_CURRENCY: ${ORG_CURRENCY:-ETB}
     ports:
       - "3000:3000"
+    volumes:
+      - withunion_uploads:/app/storage
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
 volumes:
   withunion_pgdata:
+  withunion_uploads:

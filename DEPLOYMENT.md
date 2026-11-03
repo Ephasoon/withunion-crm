@@ -1,275 +1,230 @@
 # WithUnion CRM — Deployment Guide
 
----
-
-## Firebase vs Supabase — the honest answer
-
-### ❌ Firebase is the wrong choice for this project
-
-WithUnion CRM is built on **relational PostgreSQL**: 17 tables, 38 foreign keys,
-57 indexes, and dashboard queries that use `JOIN`, `SUM`, `COUNT` and `GROUP BY`.
-
-Firebase's database is **Firestore — a NoSQL document store**. It has:
-
-| Capability we rely on | Firestore |
-|---|---|
-| SQL `JOIN` across tables | ❌ Not supported |
-| `SUM` / `GROUP BY` aggregations | ❌ Not supported |
-| Foreign-key integrity | ❌ Not supported |
-| Multi-table transactions | ⚠️ Severely limited |
-| Complex filtering (our lead search) | ⚠️ Requires composite index per query |
-
-Moving to Firebase would mean **rewriting the entire data layer** — roughly
-3–4 weeks of work — and permanently losing the reporting power that makes a CRM
-useful. Revenue-by-industry, commission leaderboards and pipeline forecasting
-all depend on SQL aggregation.
-
-> Firebase *does* now offer "Data Connect" (PostgreSQL on Cloud SQL), but it
-> costs roughly **$50–90/month minimum**, locks you into Google Cloud, and gives
-> you nothing that Supabase doesn't give you free.
-
-### ✅ Supabase is the right choice
-
-Supabase **is** PostgreSQL. Our schema runs on it with **zero code changes** —
-only the connection string differs.
-
-| | Supabase |
-|---|---|
-| Database | Real PostgreSQL 15/17 |
-| Free tier | 500 MB DB, 1 GB storage, 50k users |
-| Our schema | Works as-is |
-| Built-in auth | ✅ (we need this next) |
-| File storage | ✅ (for contracts/invoices) |
-| Realtime | ✅ (live dashboard updates) |
-| Region for Ethiopia | `eu-central-1` (Frankfurt) — lowest latency |
-
-**Recommended stack:**
-
-```
-Database  →  Supabase        (free, PostgreSQL, auth + storage included)
-Hosting   →  Vercel          (free, best Next.js performance)
-   or     →  Coolify + VPS   (full control, ~$6/month, Docker included)
-```
+This guide covers the current application: Next.js 16 standalone output, the
+`src/proxy.ts` auth gate, DB-backed sessions, document uploads under
+`STORAGE_DIR`, and the Docker/Coolify deployment flow.
 
 ---
 
-## Do I need to run `npm install` again?
+## 1. Prerequisites
 
-**Yes — once.** `package.json` changed (new scripts, new name, `tsx`).
+- Node.js 22+ for local work
+- Docker Engine + Docker Compose for the container path
+- PostgreSQL 15/17 (local container, Supabase, Neon, Railway, or a VPS)
+- A strong `DEMO_PASSWORD` and `DB_PASSWORD` for any non-local deployment
+
+> The app does not use JWT secrets. Sessions are opaque tokens stored in the
+> `sessions` table and sent in an `httpOnly` cookie.
+
+---
+
+## 2. Environment variables
+
+Copy the example file and fill in values locally:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | production | Full PostgreSQL URL. Overrides all `DB_*` values. |
+| `DIRECT_URL` | Supabase/Neon | Non-pooled URL used by `db:push` and migrations. |
+| `DB_HOST` `DB_PORT` `DB_NAME` `DB_USER` `DB_PASSWORD` | local dev | Used when `DATABASE_URL` is absent. Compose builds `DATABASE_URL` from these. |
+| `DB_SSL` | rarely | Auto-detected for managed providers. Set `true`/`false` to force. |
+| `DB_MAX_CONNECTIONS` | rarely | Auto: 1 serverless / 10 managed / 20 local. |
+| `STORAGE_DIR` | Docker | Upload directory. Container default: `/app/storage/uploads`. |
+| `SESSION_TTL_DAYS` | no | Session lifetime in days. Default: `7`. |
+| `DEMO_PASSWORD` | seeding | Password for seeded demo accounts. Must not be `Withunion2024!` in production. |
+| `OPENAI_API_KEY` | no | Blank falls back to the built-in AI engine. |
+| `ORG_NAME` `ORG_CURRENCY` | no | Organisation defaults used by the seeder. |
+| `NEXT_PUBLIC_SUPABASE_URL` `SUPABASE_SERVICE_ROLE_KEY` | no | Only if Supabase Storage/Auth is added later. |
+
+Never commit `.env`. `.dockerignore` excludes it from build context.
+
+---
+
+## 3. Path A — Docker Compose (recommended for this codebase)
+
+### 3.1 Configure
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Edit `.env` and set at least:
+
+```env
+DB_PASSWORD=replace-with-a-strong-password
+DEMO_PASSWORD=replace-with-a-different-strong-password
+SESSION_TTL_DAYS=7
+```
+
+`docker compose up` refuses to seed unless `DEMO_PASSWORD` is explicitly set.
+
+### 3.2 Start
+
+```powershell
+docker compose up -d --build
+```
+
+Compose starts:
+
+1. `postgres` and waits for its healthcheck.
+2. `migrate` — builds the `tools` Docker stage and runs `npm run db:push`.
+3. `app` — starts only after the migration exits successfully.
+
+The app runs as the non-root `nextjs` user (UID 1001). Uploads are stored in
+`/app/storage/uploads` and persisted in the `withunion_uploads` named volume.
+The image also has a Docker healthcheck against `/api/health`.
+
+### 3.3 Seed the first deployment
+
+```powershell
+docker compose run --rm seed
+```
+
+`seed` uses the same tools stage, writes demo data, and does not run during
+normal `up`. It refuses to run with the production default demo password.
+
+### 3.4 Verify
+
+```powershell
+curl.exe http://localhost:3000/api/health
+```
+
+Expected response:
+
+```json
+{ "status": "ok" }
+```
+
+The endpoint returns `503` when the database is unavailable.
+
+### 3.5 Useful commands
+
+```powershell
+docker compose logs -f app
+docker compose run --rm migrate
+docker compose down          # keeps database + upload volumes
+docker compose down -v       # deletes database + upload volumes (irreversible)
+```
+
+### 3.6 Migrations
+
+This repository currently uses **`drizzle-kit push`** in the `migrate` service.
+It is the right fit for now because there is no generated migration history and
+the schema is still pre-1.0. Once the schema is live and changes need review,
+switch to generated migrations (`drizzle-kit generate`) and apply them with
+`drizzle-kit migrate`.
+
+The final runtime image intentionally does **not** include `drizzle-kit` or the
+TypeScript source, so use the `migrate` / `seed` services (or the `tools` build
+target) instead of `docker compose exec app npm run db:push`.
+
+---
+
+## 4. Path B — Coolify or another VPS
+
+### 4.1 Application
+
+1. Create an Application from your Git repository.
+2. Build Pack: **Dockerfile**.
+3. Port: `3000`.
+4. Set the environment variables from section 2.
+5. Mount a persistent volume at `/app/storage` so uploads survive redeploys.
+6. Set the healthcheck path to `/api/health`.
+
+### 4.2 Run migrations and seed
+
+The runtime container does not carry migration tooling. Use the tools target
+from a machine or CI runner that can reach the database:
+
+```powershell
+docker build --target tools -t withunion-tools .
+docker run --rm --env-file .env withunion-tools npm run db:push
+docker run --rm --env-file .env withunion-tools npm run db:seed
+```
+
+If Coolify deploys Docker Compose instead, the `migrate` service handles this
+automatically and `docker compose run --rm seed` performs the initial load.
+
+### 4.3 HTTPS and domain
+
+Add the domain in Coolify and enable Let's Encrypt. Keep `NODE_ENV=production`
+so session cookies are marked `Secure` and the demo hint stays hidden.
+
+---
+
+## 5. Path C — Supabase + Vercel
+
+This path is suitable for the database and application, but **local document
+uploads are not durable on Vercel** because its filesystem is ephemeral. Use a
+VPS/Coolify with the `withunion_uploads` volume, or add object storage
+(Supabase Storage/S3) before relying on uploads in production.
+
+### 5.1 Database
+
+1. Create a Supabase project in a nearby region.
+2. Copy the pooled URL (port `6543`) to `DATABASE_URL`.
+3. Copy the direct URL (port `5432`) to `DIRECT_URL`.
+4. Run the schema from your workstation or CI:
 
 ```powershell
 npm install
+npm run db:push
 ```
 
-You will **not** need to reinstall again after this.
-
----
-
-## Path A — Deploy to Supabase + Vercel (recommended)
-
-### 1. Create the Supabase database
-
-1. Go to <https://supabase.com> → **New project**
-2. Name: `withunion-crm`
-3. Database password: generate a strong one and **save it**
-4. Region: **Frankfurt (eu-central-1)** — best latency from Ethiopia
-5. Wait ~2 minutes for provisioning
-
-### 2. Copy the two connection strings
-
-**Project Settings → Database → Connection string → URI**
-
-You need both:
-
-| Purpose | Port | Variable |
-|---|---|---|
-| App runtime (pooled) | `6543` | `DATABASE_URL` |
-| Migrations (direct) | `5432` | `DIRECT_URL` |
-
-Replace `[YOUR-PASSWORD]` with the password from step 1.
-
-### 3. Point your local `.env` at Supabase
-
-Open `.env` and add these two lines (leave the `DB_*` lines — they're ignored
-once `DATABASE_URL` exists):
-
-```env
-DATABASE_URL=postgresql://postgres.abcdefgh:YOURPASSWORD@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
-DIRECT_URL=postgresql://postgres.abcdefgh:YOURPASSWORD@aws-0-eu-central-1.pooler.supabase.com:5432/postgres
-```
-
-### 4. Create the tables and demo data on Supabase
+Seed only if you want demo data:
 
 ```powershell
-npm run db:push
+$env:NODE_ENV="production"
+$env:DEMO_PASSWORD="a-strong-unique-password"
 npm run db:seed
 ```
 
-TLS is detected and enabled automatically — nothing else to configure.
+### 5.2 Vercel
 
-Verify in Supabase → **Table Editor**: you should see all 17 tables.
+1. Import the repository at <https://vercel.com/new>.
+2. Add the environment variables from section 2.
+3. Deploy.
+4. Confirm `https://your-app.vercel.app/api/health` returns `{ "status": "ok" }`.
 
-### 5. Deploy to Vercel
-
-```powershell
-npm i -g vercel
-vercel
-```
-
-Or connect the GitHub repo at <https://vercel.com/new>.
-
-### 6. Add environment variables in Vercel
-
-**Project → Settings → Environment Variables**
-
-| Key | Value |
-|---|---|
-| `DATABASE_URL` | the `6543` pooled URL |
-| `DIRECT_URL` | the `5432` direct URL |
-| `JWT_SECRET` | a long random string |
-| `JWT_REFRESH_SECRET` | another long random string |
-| `NODE_ENV` | `production` |
-| `OPENAI_API_KEY` | optional |
-
-Generate secrets with:
-
-```powershell
-node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
-```
-
-### 7. Verify
-
-Visit `https://your-app.vercel.app/api/health`:
-
-```json
-{
-  "status": "ok",
-  "database": {
-    "status": "connected",
-    "provider": "supabase",
-    "ssl": true
-  }
-}
-```
+Do not use the Docker storage volume on Vercel; it does not exist there.
 
 ---
 
-## Path B — Deploy to Coolify (your own VPS)
+## 6. Backups and operations
 
-You mentioned Coolify in the original plan. This gives full control and costs
-about **$6/month** on Hetzner or DigitalOcean.
-
-### 1. Push to GitHub
-
-```powershell
-git init
-git add .
-git commit -m "WithUnion CRM v1.0"
-git remote add origin https://github.com/YOUR_USERNAME/withunion-crm.git
-git push -u origin main
-```
-
-> `.gitignore` already excludes `.env` — your secrets stay private.
-
-### 2. In Coolify
-
-1. **New Resource → Application → Public/Private Repository**
-2. Select your repo
-3. Build Pack: **Dockerfile** (already included)
-4. Port: `3000`
-
-### 3. Add a PostgreSQL database in Coolify
-
-**New Resource → Database → PostgreSQL 17**
-
-Coolify generates an internal connection string — copy it.
-
-### 4. Set environment variables in Coolify
-
-```
-DATABASE_URL=<the internal PostgreSQL URL from Coolify>
-NODE_ENV=production
-JWT_SECRET=<random 96-char hex>
-JWT_REFRESH_SECRET=<random 96-char hex>
-ORG_NAME=WithUnion Technologies
-ORG_CURRENCY=ETB
-```
-
-### 5. Deploy, then initialise the schema
-
-After the first deploy, open the app terminal in Coolify:
-
-```bash
-npm run db:push
-npm run db:seed
-```
-
-### 6. Add your domain + SSL
-
-Coolify → **Domains** → add `crm.yourdomain.com`.
-Let's Encrypt certificates are issued automatically.
+- Back up PostgreSQL regularly (`pg_dump`) or enable point-in-time recovery.
+- Back up the upload volume (`withunion_uploads`) alongside the database.
+- Check `/api/health` after every deploy.
+- Set `SESSION_TTL_DAYS` to a value that matches your security policy.
+- Rotate `DEMO_PASSWORD`, `DB_PASSWORD`, and any provider keys after sharing
+  access with a contractor or leaving a hosting provider.
 
 ---
 
-## Path C — Run everything locally with Docker
+## 7. Pre-launch security checklist
 
-```powershell
-docker compose up -d
-docker compose exec app npm run db:push
-docker compose exec app npm run db:seed
-```
-
-Open <http://localhost:3000>
-
----
-
-## Environment variable reference
-
-| Variable | Required | Notes |
-|---|---|---|
-| `DATABASE_URL` | production | Overrides all `DB_*` values |
-| `DIRECT_URL` | Supabase/Neon | Used only by `db:push` |
-| `DB_HOST` `DB_PORT` `DB_NAME` `DB_USER` `DB_PASSWORD` | local dev | Ignored when `DATABASE_URL` is set |
-| `DB_SSL` | rarely | Auto-detected; `true`/`false` to force |
-| `DB_MAX_CONNECTIONS` | rarely | Auto: 1 serverless / 10 managed / 20 local |
-| `JWT_SECRET` | yes | Long random string |
-| `JWT_REFRESH_SECRET` | yes | Different long random string |
-| `OPENAI_API_KEY` | no | Blank = built-in AI engine |
-| `NEXT_PUBLIC_SUPABASE_URL` | no | Only for Supabase Storage |
-| `SUPABASE_SERVICE_ROLE_KEY` | no | Only for Supabase Storage |
+- [ ] `DEMO_PASSWORD` changed from `Withunion2024!`
+- [ ] `DB_PASSWORD` is strong and stored in a password manager
+- [ ] `.env` is not committed (`git status` must not list it)
+- [ ] `NODE_ENV=production` on the server
+- [ ] HTTPS enabled (session cookies use `Secure`)
+- [ ] `/api/health` passes
+- [ ] `withunion_uploads` volume mounted and writable by `nextjs`
+- [ ] Database and upload-volume backups scheduled
+- [ ] Login rate limiting reviewed for your number of app instances
+- [ ] Dependency audit reviewed (`npm audit`)
 
 ---
 
-## Pre-launch security checklist
+## 8. Known limitations
 
-- [ ] `JWT_SECRET` and `JWT_REFRESH_SECRET` regenerated (not the dev defaults)
-- [ ] `.env` is **not** committed to Git (`git status` should never list it)
-- [ ] Supabase database password is strong and stored in a password manager
-- [ ] `NODE_ENV=production` set on the host
-- [ ] Custom domain with HTTPS enabled
-- [ ] Supabase → Database → **Enable Point-in-Time Recovery** (paid tier) or
-      schedule `pg_dump` backups
-- [ ] Authentication implemented *(not yet built — see roadmap)*
-
----
-
-## Cost comparison
-
-| Setup | Monthly | Best for |
-|---|---|---|
-| Supabase Free + Vercel Free | **$0** | MVP, first customers |
-| Supabase Pro + Vercel Pro | ~$45 | Growing SaaS |
-| Coolify + Hetzner CX22 | ~$6 | Full control, cost-sensitive |
-| Firebase Data Connect | ~$50–90 | ❌ Not recommended |
-
-**Recommendation: start on Supabase Free + Vercel Free ($0), migrate to Coolify
-when you exceed the free tiers.**
-
----
-
-## Known limitation before you go live
-
-⚠️ **There is no authentication yet.** Anyone with the URL can view all data.
-
-Do not deploy publicly with real customer data until login is implemented.
-That is the single most important remaining task.
+- The login rate limiter is in-memory and is per-process. Multiple app
+  instances need a shared store such as Redis.
+- Local filesystem uploads require a persistent volume or a single app
+  instance; serverless platforms need object storage.
+- `drizzle-kit push` is convenient but does not produce reviewable migration
+  history. Adopt generated migrations before the schema becomes long-lived.

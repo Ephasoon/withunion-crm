@@ -2,12 +2,13 @@ node_modules
 .next
 .git
 .github
-drizzle
-*.md
-!SETUP.md
+storage
+uploads
+public/uploads
+public/storage
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 npm-debug.log*
 .vscode
 .idea
@@ -16,3 +17,5 @@ coverage
 Dockerfile
 .dockerignore
 docker-compose.yml
+*.md
+!SETUP.md
