@@ -4,8 +4,10 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { clients, documents, projects, users } from "@/db/schema";
 import { canWrite, requireApiUser } from "@/lib/auth";
+import { env } from "@/config/env";
 import {
   contentMatchesExtension,
+  createStorageDriver,
   deleteStoredFile,
   MAX_UPLOAD_BYTES,
   safeOriginalName,
@@ -116,6 +118,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Your role cannot upload documents" },
         { status: 403 }
+      );
+    }
+
+    if (env.storage.driver === "supabase") {
+      return NextResponse.json(
+        { error: "Use /api/documents/upload-url for direct browser uploads" },
+        { status: 400 }
       );
     }
 

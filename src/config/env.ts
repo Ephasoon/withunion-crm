@@ -214,7 +214,9 @@ export const env = {
 
   // Local file storage for uploaded documents (kept outside public/)
   storage: {
+    driver: optional("STORAGE_DRIVER", "local"),
     dir: optional("STORAGE_DIR", "./storage/uploads"),
+    supabaseBucket: optional("SUPABASE_STORAGE_BUCKET"),
   },
 
   // Auth — opaque session tokens stored (hashed) in the sessions table

@@ -485,6 +485,29 @@ async function verifyWriteActor(
       url: `${BASE_URL}/api/documents/${fixtures.documentId}`,
     },
     {
+      label: "POST /api/documents/upload-url",
+      method: "POST",
+      url: `${BASE_URL}/api/documents/upload-url`,
+      body: {
+        clientId: fixtures.clientId,
+        filename: "isolation.pdf",
+        mimeType: "application/pdf",
+        size: 100,
+      },
+    },
+    {
+      label: "POST /api/documents/confirm-upload",
+      method: "POST",
+      url: `${BASE_URL}/api/documents/confirm-upload`,
+      body: {
+        storedName: "does-not-exist.pdf",
+        size: 100,
+        mimeType: "application/pdf",
+        name: "isolation.pdf",
+        clientId: fixtures.clientId,
+      },
+    },
+    {
       label: "POST /api/leads/[id]/convert",
       method: "POST",
       url: `${BASE_URL}/api/leads/${fixtures.leadId}/convert`,

@@ -4,11 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { canManageTeam, requireApiUser } from "@/lib/auth";
-import {
-  deleteStoredFile,
-  readStoredFile,
-  sanitizeDownloadName,
-} from "@/lib/storage";
+import { env } from "@/config/env";
+import { createStorageDriver, readStoredFile, sanitizeDownloadName } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,6 +42,16 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 
     if (!document) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    }
+
+    if (env.storage.driver === "supabase") {
+      const driver = createStorageDriver();
+      const signedUrl = await driver.getDownloadUrl(document.url);
+      return NextResponse.json({
+        signedUrl,
+        name: document.name,
+        mimeType: document.mimeType,
+      });
     }
 
     const file = await readStoredFile(document.url);
@@ -99,7 +106,8 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
 
-    await deleteStoredFile(deleted.url).catch((error) => {
+    const driver = createStorageDriver();
+    await driver.deleteStoredFile(deleted.url).catch((error) => {
       console.error("Document file delete error:", error);
     });
 

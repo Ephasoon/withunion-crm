@@ -112,6 +112,7 @@ export function resolveStoredPath(storedName: string): string {
   return candidate;
 }
 
+/** Local driver: persisted files on disk (default, unchanged behaviour). */
 export async function saveBuffer(
   buffer: Buffer,
   extension: string
@@ -158,4 +159,128 @@ export function sanitizeDownloadName(originalName: string): string {
 export function safeOriginalName(filename: string): string {
   const base = filename.replace(/^.*[\\/]/, "").trim();
   return (base || "document").slice(0, 255);
+}
+
+// ─── Storage driver interface ──────────────────────────────────────────────
+
+export type StorageDriver = "local" | "supabase";
+
+export interface StorageAdapter {
+  saveBuffer(buffer: Buffer, extension: string): Promise<string>;
+  readStoredFile(storedName: string): Promise<Buffer | null>;
+  deleteStoredFile(storedName: string): Promise<void>;
+  /** Returns a URL the browser can PUT the file to directly. */
+  getUploadUrl(storedName: string, mimeType: string, size: number): Promise<{
+    url: string;
+  }>;
+  /** Confirms an object exists and its byte size matches. */
+  verifyObject(storedName: string, size: number): Promise<boolean>;
+  /** Returns a short-lived signed download URL. */
+  getDownloadUrl(storedName: string): Promise<string>;
+}
+
+function localAdapter(): StorageAdapter {
+  return {
+    saveBuffer,
+    readStoredFile,
+    deleteStoredFile,
+    async getUploadUrl() {
+      throw new Error("Direct browser uploads are not supported by the local driver");
+    },
+    async verifyObject(storedName, size) {
+      const file = await readStoredFile(storedName);
+      if (!file) return false;
+      return file.length === size;
+    },
+    async getDownloadUrl(storedName) {
+      throw new Error("Signed downloads are not supported by the local driver");
+    },
+  };
+}
+
+function supabaseAdapter(): StorageAdapter {
+  const bucket = env.storage.supabaseBucket;
+  if (!bucket) {
+    throw new Error("SUPABASE_STORAGE_BUCKET is required when STORAGE_DRIVER=supabase");
+  }
+  const serviceKey = env.supabase.serviceKey;
+  if (!serviceKey) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required when STORAGE_DRIVER=supabase");
+  }
+  const base = `${env.supabase.url}/storage/v1`;
+
+  const headers = () => ({
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
+  });
+
+  async function request(path: string, init: RequestInit = {}): Promise<Response> {
+    const res = await fetch(`${base}/${path}`, {
+      ...init,
+      headers: { ...headers(), ...init.headers },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Supabase storage error ${res.status}: ${text.slice(0, 300)}`);
+    }
+    return res;
+  }
+
+  const objectPath = (storedName: string) => `object/${bucket}/${encodeURIComponent(storedName)}`;
+
+  return {
+    async saveBuffer(buffer, extension) {
+      const storedName = `${randomUUID()}${extension.toLowerCase()}`;
+      await request(objectPath(storedName), {
+        method: "PUT",
+        headers: { "Content-Type": "application/octet-stream", "x-upsert": "true" },
+        body: buffer as unknown as BodyInit,
+      });
+      return storedName;
+    },
+    async readStoredFile(storedName) {
+      const res = await request(objectPath(storedName));
+      return Buffer.from(await res.arrayBuffer());
+    },
+    async deleteStoredFile(storedName) {
+      try {
+        await request(objectPath(storedName), { method: "DELETE" });
+      } catch {
+        // Best effort: object may already be gone.
+      }
+    },
+    async getUploadUrl(storedName, mimeType, size) {
+      const res = await request(
+        `object/sign/upload/${bucket}/${encodeURIComponent(storedName)}?expires_in=3600`,
+        { method: "POST" }
+      );
+      const data = (await res.json()) as { signedUrl?: string };
+      return { url: data.signedUrl ?? `${base}/object/upload/${bucket}/${encodeURIComponent(storedName)}` };
+    },
+    async verifyObject(storedName, size) {
+      try {
+        const res = await request(objectPath(storedName));
+        const contentLength = res.headers.get("content-length");
+        return contentLength !== null ? Number(contentLength) === size : true;
+      } catch {
+        return false;
+      }
+    },
+    async getDownloadUrl(storedName) {
+      const res = await request(
+        `object/sign/${bucket}/${encodeURIComponent(storedName)}?expires_in=900`
+      );
+      const data = (await res.json()) as { signedUrl?: string };
+      return data.signedUrl ?? "";
+    },
+  };
+}
+
+export function createStorageDriver(): StorageAdapter {
+  switch (env.storage.driver) {
+    case "supabase":
+      return supabaseAdapter();
+    default:
+      return localAdapter();
+  }
 }
