@@ -12,23 +12,26 @@ const STATUSES = ["draft", "sent", "viewed", "paid", "overdue", "cancelled"] as 
 
 const idSchema = z.string().uuid();
 
+const emptyToUndefined = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? undefined : (typeof v === "string" ? v.trim() : v);
+
 const updateInvoiceSchema = z
   .object({
-    invoiceNumber: z.string().trim().min(1).max(60).optional(),
-    status: z.enum(STATUSES).optional(),
-    issueDate: z.string().datetime().optional().or(z.literal("")),
-    dueDate: z.string().datetime().optional().or(z.literal("")),
-    paidAt: z.string().datetime().optional().or(z.literal("")),
-    subtotal: z.union([z.string().trim(), z.number()]).optional(),
-    taxRate: z.union([z.string().trim(), z.number()]).optional(),
-    taxAmount: z.union([z.string().trim(), z.number()]).optional(),
-    discount: z.union([z.string().trim(), z.number()]).optional(),
-    total: z.union([z.string().trim(), z.number()]).optional(),
-    currency: z.string().trim().min(3).max(3).optional(),
-    notes: z.string().trim().max(5000).optional(),
-    terms: z.string().trim().max(5000).optional(),
-    clientId: z.string().uuid().optional(),
-    projectId: z.string().uuid().optional().or(z.literal("")),
+    invoiceNumber: z.preprocess(emptyToUndefined, z.string().min(1).max(60).optional()),
+    status: z.preprocess(emptyToUndefined, z.enum(STATUSES).optional()),
+    issueDate: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
+    dueDate: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
+    paidAt: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
+    subtotal: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
+    taxRate: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
+    taxAmount: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
+    discount: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
+    total: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
+    currency: z.preprocess(emptyToUndefined, z.string().min(3).max(3).optional()),
+    notes: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
+    terms: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
+    clientId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
+    projectId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
 
@@ -50,8 +53,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const parsed = updateInvoiceSchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      const fields = Object.fromEntries(
+        Object.entries(fieldErrors).map(([k, v]) => [k, (v && v[0]) || "Invalid value"])
+      );
       return NextResponse.json(
-        { error: "Invalid invoice data", issues: parsed.error.flatten().fieldErrors },
+        { error: "Invalid invoice data", fields, issues: fieldErrors },
         { status: 400 }
       );
     }

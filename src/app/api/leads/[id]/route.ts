@@ -13,22 +13,25 @@ const STATUSES = ["new", "contacted", "qualified", "unqualified", "converted"] a
 
 const idSchema = z.string().uuid();
 
+const emptyToUndefined = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? undefined : (typeof v === "string" ? v.trim() : v);
+
 const updateLeadSchema = z
   .object({
-    name: z.string().trim().min(1).max(160).optional(),
-    email: z.string().trim().email().max(254).optional().or(z.literal("")),
-    phone: z.string().trim().max(50).optional(),
-    company: z.string().trim().max(160).optional(),
-    industry: z.string().trim().max(120).optional(),
-    source: z.string().trim().max(80).optional(),
+    name: z.preprocess(emptyToUndefined, z.string().min(1, "Name is required").max(160).optional()),
+    email: z.preprocess(emptyToUndefined, z.string().email().max(254).optional()),
+    phone: z.preprocess(emptyToUndefined, z.string().max(50).optional()),
+    company: z.preprocess(emptyToUndefined, z.string().max(160).optional()),
+    industry: z.preprocess(emptyToUndefined, z.string().max(120).optional()),
+    source: z.preprocess(emptyToUndefined, z.string().max(80).optional()),
     status: z.enum(STATUSES).optional(),
     stage: z.enum(STAGES).optional(),
     score: z.coerce.number().int().min(0).max(100).optional(),
-    value: z.union([z.string().trim(), z.number()]).optional(),
-    notes: z.string().trim().max(5000).optional(),
+    value: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
+    notes: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
     tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
-    assignedToId: z.string().uuid().optional().or(z.literal("")),
-    nextFollowUp: z.string().datetime().optional().or(z.literal("")),
+    assignedToId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
+    nextFollowUp: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
 
@@ -50,8 +53,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const parsed = updateLeadSchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      const fields = Object.fromEntries(
+        Object.entries(fieldErrors).map(([k, v]) => [k, (v && v[0]) || "Invalid value"])
+      );
       return NextResponse.json(
-        { error: "Invalid lead data", issues: parsed.error.flatten().fieldErrors },
+        { error: "Invalid lead data", fields, issues: fieldErrors },
         { status: 400 }
       );
     }

@@ -86,11 +86,13 @@ function LeadFormModal({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
+    setFieldErrors({});
     try {
       const payload = {
         name: form.name,
@@ -115,6 +117,7 @@ function LeadFormModal({
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
+        if (body?.fields) setFieldErrors(body.fields);
         throw new Error(body?.error ?? "Unable to save lead");
       }
 
@@ -148,51 +151,57 @@ function LeadFormModal({
               <Input
                 required
                 placeholder="e.g. Hana Worku"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
+                 value={form.name}
+                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+               />
+               {fieldErrors.name && <p className="text-xs text-red-600 mt-1">{fieldErrors.name}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Email</label>
               <Input
                 type="email"
                 placeholder="hana@company.com"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
+                 value={form.email}
+                 onChange={(e) => setForm({ ...form, email: e.target.value })}
+               />
+               {fieldErrors.email && <p className="text-xs text-red-600 mt-1">{fieldErrors.email}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Phone</label>
               <Input
                 placeholder="+251911..."
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              />
+                 value={form.phone}
+                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
+               />
+               {fieldErrors.phone && <p className="text-xs text-red-600 mt-1">{fieldErrors.phone}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Company</label>
               <Input
                 placeholder="Company name"
-                value={form.company}
-                onChange={(e) => setForm({ ...form, company: e.target.value })}
-              />
+                 value={form.company}
+                 onChange={(e) => setForm({ ...form, company: e.target.value })}
+               />
+               {fieldErrors.company && <p className="text-xs text-red-600 mt-1">{fieldErrors.company}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Industry</label>
               <Input
                 placeholder="Technology"
-                value={form.industry}
-                onChange={(e) => setForm({ ...form, industry: e.target.value })}
-              />
+                 value={form.industry}
+                 onChange={(e) => setForm({ ...form, industry: e.target.value })}
+               />
+               {fieldErrors.industry && <p className="text-xs text-red-600 mt-1">{fieldErrors.industry}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Deal Value (ETB)</label>
               <Input
                 type="number"
                 placeholder="500000"
-                value={form.value}
-                onChange={(e) => setForm({ ...form, value: e.target.value })}
-              />
+                 value={form.value}
+                 onChange={(e) => setForm({ ...form, value: e.target.value })}
+               />
+               {fieldErrors.value && <p className="text-xs text-red-600 mt-1">{fieldErrors.value}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Stage</label>
@@ -201,10 +210,11 @@ function LeadFormModal({
                 value={form.stage}
                 onChange={(e) => setForm({ ...form, stage: e.target.value })}
               >
-                {PIPELINE_STAGES.map((s) => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
-                ))}
-              </select>
+                 {PIPELINE_STAGES.map((s) => (
+                   <option key={s.id} value={s.id}>{s.label}</option>
+                 ))}
+               </select>
+               {fieldErrors.stage && <p className="text-xs text-red-600 mt-1">{fieldErrors.stage}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Source</label>
@@ -214,27 +224,30 @@ function LeadFormModal({
                 onChange={(e) => setForm({ ...form, source: e.target.value })}
               >
                 <option value="">Select source</option>
-                {LEAD_SOURCES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+                 {LEAD_SOURCES.map((s) => (
+                   <option key={s} value={s}>{s}</option>
+                 ))}
+               </select>
+               {fieldErrors.source && <p className="text-xs text-red-600 mt-1">{fieldErrors.source}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Next Follow-up</label>
               <Input
                 type="date"
                 value={form.nextFollowUp}
-                onChange={(e) => setForm({ ...form, nextFollowUp: e.target.value })}
-              />
+                 onChange={(e) => setForm({ ...form, nextFollowUp: e.target.value })}
+               />
+               {fieldErrors.nextFollowUp && <p className="text-xs text-red-600 mt-1">{fieldErrors.nextFollowUp}</p>}
             </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Notes</label>
               <textarea
                 rows={3}
                 className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              />
+                 value={form.notes}
+                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
+               />
+               {fieldErrors.notes && <p className="text-xs text-red-600 mt-1">{fieldErrors.notes}</p>}
             </div>
           </div>
           <div className="flex gap-3 pt-2">

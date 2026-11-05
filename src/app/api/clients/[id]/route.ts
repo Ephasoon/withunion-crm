@@ -10,20 +10,37 @@ export const dynamic = "force-dynamic";
 
 const idSchema = z.string().uuid();
 
+const emptyToUndefined = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? undefined : (typeof v === "string" ? v.trim() : v);
+
 const updateClientSchema = z
   .object({
-    name: z.string().trim().min(1).max(160).optional(),
-    email: z.string().trim().email().max(254).optional().or(z.literal("")),
-    phone: z.string().trim().max(50).optional(),
-    company: z.string().trim().max(160).optional(),
-    industry: z.string().trim().max(120).optional(),
-    website: z.string().trim().url().max(300).optional().or(z.literal("")),
-    address: z.string().trim().max(300).optional(),
-    city: z.string().trim().max(120).optional(),
-    country: z.string().trim().max(120).optional(),
+    name: z.preprocess(emptyToUndefined, z.string().min(1, "Name is required").max(160).optional()),
+    email: z.preprocess(emptyToUndefined, z.string().email().max(254).optional()),
+    phone: z.preprocess(emptyToUndefined, z.string().max(50).optional()),
+    company: z.preprocess(emptyToUndefined, z.string().max(160).optional()),
+    industry: z.preprocess(emptyToUndefined, z.string().max(120).optional()),
+    website: z.preprocess((v) => {
+      if (typeof v !== "string") return v;
+      const t = v.trim();
+      if (t === "") return undefined;
+      if (!/^[a-z][a-z0-9+.\-]*:/i.test(t)) return "https://" + t;
+      return t;
+    }, z.string().url("Invalid website URL").max(300).optional().refine((v) => {
+      if (v === undefined) return true;
+      try {
+        const u = new URL(v);
+        return u.hostname === "localhost" || u.hostname.includes(".");
+      } catch {
+        return false;
+      }
+    }, "Invalid website URL")),
+    address: z.preprocess(emptyToUndefined, z.string().max(300).optional()),
+    city: z.preprocess(emptyToUndefined, z.string().max(120).optional()),
+    country: z.preprocess(emptyToUndefined, z.string().max(120).optional()),
     tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
-    notes: z.string().trim().max(5000).optional(),
-    assignedToId: z.string().uuid().optional().or(z.literal("")),
+    notes: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
+    assignedToId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
     isActive: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
@@ -46,8 +63,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const parsed = updateClientSchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      const fields = Object.fromEntries(
+        Object.entries(fieldErrors).map(([k, v]) => [k, (v && v[0]) || "Invalid value"])
+      );
       return NextResponse.json(
-        { error: "Invalid client data", issues: parsed.error.flatten().fieldErrors },
+        { error: "Invalid client data", fields, issues: fieldErrors },
         { status: 400 }
       );
     }

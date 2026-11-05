@@ -12,18 +12,21 @@ const STATUSES = ["planning", "active", "on_hold", "completed", "cancelled"] as 
 
 const idSchema = z.string().uuid();
 
+const emptyToUndefined = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? undefined : (typeof v === "string" ? v.trim() : v);
+
 const updateProjectSchema = z
   .object({
-    name: z.string().trim().min(1).max(160).optional(),
-    description: z.string().trim().max(5000).optional(),
-    status: z.enum(STATUSES).optional(),
-    startDate: z.string().datetime().optional().or(z.literal("")),
-    dueDate: z.string().datetime().optional().or(z.literal("")),
-    budget: z.union([z.string().trim(), z.number()]).optional(),
-    spent: z.union([z.string().trim(), z.number()]).optional(),
-    progress: z.coerce.number().int().min(0).max(100).optional(),
-    clientId: z.string().uuid().optional().or(z.literal("")),
-    managerId: z.string().uuid().optional().or(z.literal("")),
+    name: z.preprocess(emptyToUndefined, z.string().min(1, "Name is required").max(160).optional()),
+    description: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
+    status: z.preprocess(emptyToUndefined, z.enum(STATUSES).optional()),
+    startDate: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
+    dueDate: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
+    budget: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
+    spent: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
+    progress: z.preprocess(emptyToUndefined, z.coerce.number().int().min(0).max(100).optional()),
+    clientId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
+    managerId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
     tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
@@ -46,8 +49,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const parsed = updateProjectSchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      const fields = Object.fromEntries(
+        Object.entries(fieldErrors).map(([k, v]) => [k, (v && v[0]) || "Invalid value"])
+      );
       return NextResponse.json(
-        { error: "Invalid project data", issues: parsed.error.flatten().fieldErrors },
+        { error: "Invalid project data", fields, issues: fieldErrors },
         { status: 400 }
       );
     }

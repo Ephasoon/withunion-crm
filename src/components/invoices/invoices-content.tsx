@@ -87,11 +87,13 @@ function InvoiceFormModal({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
+    setFieldErrors({});
     try {
       const payload = {
         invoiceNumber: form.invoiceNumber,
@@ -114,6 +116,7 @@ function InvoiceFormModal({
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
+        if (body?.fields) setFieldErrors(body.fields);
         throw new Error(body?.error ?? "Unable to save invoice");
       }
 
@@ -146,6 +149,7 @@ function InvoiceFormModal({
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Invoice Number *</label>
               <Input required value={form.invoiceNumber} onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })} />
+              {fieldErrors.invoiceNumber && <p className="text-xs text-red-600 mt-1">{fieldErrors.invoiceNumber}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Status</label>
@@ -158,43 +162,52 @@ function InvoiceFormModal({
                   <option key={id} value={id}>{config.label}</option>
                 ))}
               </select>
+              {fieldErrors.status && <p className="text-xs text-red-600 mt-1">{fieldErrors.status}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Issue Date</label>
               <Input type="date" value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} />
+              {fieldErrors.issueDate && <p className="text-xs text-red-600 mt-1">{fieldErrors.issueDate}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Due Date</label>
               <Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+              {fieldErrors.dueDate && <p className="text-xs text-red-600 mt-1">{fieldErrors.dueDate}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Subtotal</label>
               <Input type="number" value={form.subtotal} onChange={(e) => setForm({ ...form, subtotal: e.target.value })} />
+              {fieldErrors.subtotal && <p className="text-xs text-red-600 mt-1">{fieldErrors.subtotal}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Tax Rate (%)</label>
               <Input type="number" value={form.taxRate} onChange={(e) => setForm({ ...form, taxRate: e.target.value })} />
+              {fieldErrors.taxRate && <p className="text-xs text-red-600 mt-1">{fieldErrors.taxRate}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Tax Amount</label>
               <Input type="number" value={form.taxAmount} onChange={(e) => setForm({ ...form, taxAmount: e.target.value })} />
+              {fieldErrors.taxAmount && <p className="text-xs text-red-600 mt-1">{fieldErrors.taxAmount}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Discount</label>
               <Input type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} />
+              {fieldErrors.discount && <p className="text-xs text-red-600 mt-1">{fieldErrors.discount}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Total</label>
               <Input type="number" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} />
+              {fieldErrors.total && <p className="text-xs text-red-600 mt-1">{fieldErrors.total}</p>}
             </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Notes</label>
               <textarea
                 rows={3}
                 className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              />
+                 value={form.notes}
+                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
+               />
+               {fieldErrors.notes && <p className="text-xs text-red-600 mt-1">{fieldErrors.notes}</p>}
             </div>
           </div>
           <div className="flex gap-3 pt-2">

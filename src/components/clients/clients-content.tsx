@@ -66,11 +66,13 @@ function ClientFormModal({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
+    setFieldErrors({});
     try {
       const res = await fetch(client ? `/api/clients/${client.id}` : "/api/clients", {
         method: client ? "PATCH" : "POST",
@@ -80,6 +82,7 @@ function ClientFormModal({
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
+        if (body?.fields) setFieldErrors(body.fields);
         throw new Error(body?.error ?? "Unable to save client");
       }
 
@@ -111,18 +114,22 @@ function ClientFormModal({
             <div className="col-span-2">
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Full Name *</label>
               <Input required placeholder="Contact name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              {fieldErrors.name && <p className="text-xs text-red-600 mt-1">{fieldErrors.name}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Email</label>
               <Input type="email" placeholder="email@company.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              {fieldErrors.email && <p className="text-xs text-red-600 mt-1">{fieldErrors.email}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Phone</label>
               <Input placeholder="+251911..." value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              {fieldErrors.phone && <p className="text-xs text-red-600 mt-1">{fieldErrors.phone}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Company</label>
               <Input placeholder="Company name" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+              {fieldErrors.company && <p className="text-xs text-red-600 mt-1">{fieldErrors.company}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Industry</label>
@@ -134,18 +141,22 @@ function ClientFormModal({
                 <option value="">Select industry</option>
                 {INDUSTRIES.map((ind) => <option key={ind} value={ind}>{ind}</option>)}
               </select>
+              {fieldErrors.industry && <p className="text-xs text-red-600 mt-1">{fieldErrors.industry}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">City</label>
               <Input placeholder="Addis Ababa" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              {fieldErrors.city && <p className="text-xs text-red-600 mt-1">{fieldErrors.city}</p>}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Website</label>
               <Input placeholder="https://company.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+              {fieldErrors.website && <p className="text-xs text-red-600 mt-1">{fieldErrors.website}</p>}
             </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Address</label>
               <Input placeholder="Street, area" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              {fieldErrors.address && <p className="text-xs text-red-600 mt-1">{fieldErrors.address}</p>}
             </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">Notes</label>
@@ -155,6 +166,7 @@ function ClientFormModal({
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
+              {fieldErrors.notes && <p className="text-xs text-red-600 mt-1">{fieldErrors.notes}</p>}
             </div>
           </div>
           <div className="flex gap-3 pt-2">
