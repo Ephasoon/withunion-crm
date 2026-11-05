@@ -15,18 +15,21 @@ const idSchema = z.string().uuid();
 const emptyToUndefined = (v: unknown) =>
   typeof v === "string" && v.trim() === "" ? undefined : (typeof v === "string" ? v.trim() : v);
 
+const emptyToNull = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? null : (typeof v === "string" ? v.trim() : v);
+
 const updateProjectSchema = z
   .object({
-    name: z.preprocess(emptyToUndefined, z.string().min(1, "Name is required").max(160).optional()),
-    description: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
+    name: z.string().trim().min(1, "Name is required").max(160).optional(),
+    description: z.preprocess(emptyToNull, z.string().max(5000).nullable().optional()),
     status: z.preprocess(emptyToUndefined, z.enum(STATUSES).optional()),
-    startDate: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
-    dueDate: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
+    startDate: z.preprocess(emptyToNull, z.string().datetime().nullable().optional()),
+    dueDate: z.preprocess(emptyToNull, z.string().datetime().nullable().optional()),
     budget: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
     spent: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
     progress: z.preprocess(emptyToUndefined, z.coerce.number().int().min(0).max(100).optional()),
-    clientId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
-    managerId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
+    clientId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
+    managerId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
     tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });

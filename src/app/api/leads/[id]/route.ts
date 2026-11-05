@@ -16,22 +16,25 @@ const idSchema = z.string().uuid();
 const emptyToUndefined = (v: unknown) =>
   typeof v === "string" && v.trim() === "" ? undefined : (typeof v === "string" ? v.trim() : v);
 
+const emptyToNull = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? null : (typeof v === "string" ? v.trim() : v);
+
 const updateLeadSchema = z
   .object({
-    name: z.preprocess(emptyToUndefined, z.string().min(1, "Name is required").max(160).optional()),
-    email: z.preprocess(emptyToUndefined, z.string().email().max(254).optional()),
-    phone: z.preprocess(emptyToUndefined, z.string().max(50).optional()),
-    company: z.preprocess(emptyToUndefined, z.string().max(160).optional()),
-    industry: z.preprocess(emptyToUndefined, z.string().max(120).optional()),
-    source: z.preprocess(emptyToUndefined, z.string().max(80).optional()),
+    name: z.string().trim().min(1, "Name is required").max(160).optional(),
+    email: z.preprocess(emptyToNull, z.string().email().max(254).nullable().optional()),
+    phone: z.preprocess(emptyToNull, z.string().max(50).nullable().optional()),
+    company: z.preprocess(emptyToNull, z.string().max(160).nullable().optional()),
+    industry: z.preprocess(emptyToNull, z.string().max(120).nullable().optional()),
+    source: z.preprocess(emptyToNull, z.string().max(80).nullable().optional()),
     status: z.enum(STATUSES).optional(),
     stage: z.enum(STAGES).optional(),
-    score: z.coerce.number().int().min(0).max(100).optional(),
+    score: z.preprocess(emptyToUndefined, z.coerce.number().int().min(0).max(100).optional()),
     value: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
-    notes: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
+    notes: z.preprocess(emptyToNull, z.string().max(5000).nullable().optional()),
     tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
-    assignedToId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
-    nextFollowUp: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
+    assignedToId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
+    nextFollowUp: z.preprocess(emptyToNull, z.string().datetime().nullable().optional()),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
 

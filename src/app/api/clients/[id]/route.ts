@@ -13,21 +13,24 @@ const idSchema = z.string().uuid();
 const emptyToUndefined = (v: unknown) =>
   typeof v === "string" && v.trim() === "" ? undefined : (typeof v === "string" ? v.trim() : v);
 
+const emptyToNull = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? null : (typeof v === "string" ? v.trim() : v);
+
 const updateClientSchema = z
   .object({
-    name: z.preprocess(emptyToUndefined, z.string().min(1, "Name is required").max(160).optional()),
-    email: z.preprocess(emptyToUndefined, z.string().email().max(254).optional()),
-    phone: z.preprocess(emptyToUndefined, z.string().max(50).optional()),
-    company: z.preprocess(emptyToUndefined, z.string().max(160).optional()),
-    industry: z.preprocess(emptyToUndefined, z.string().max(120).optional()),
+    name: z.string().trim().min(1, "Name is required").max(160).optional(),
+    email: z.preprocess(emptyToNull, z.string().email().max(254).nullable().optional()),
+    phone: z.preprocess(emptyToNull, z.string().max(50).nullable().optional()),
+    company: z.preprocess(emptyToNull, z.string().max(160).nullable().optional()),
+    industry: z.preprocess(emptyToNull, z.string().max(120).nullable().optional()),
     website: z.preprocess((v) => {
       if (typeof v !== "string") return v;
       const t = v.trim();
-      if (t === "") return undefined;
+      if (t === "") return null;
       if (!/^[a-z][a-z0-9+.\-]*:/i.test(t)) return "https://" + t;
       return t;
-    }, z.string().url("Invalid website URL").max(300).optional().refine((v) => {
-      if (v === undefined) return true;
+    }, z.string().url("Invalid website URL").max(300).nullable().optional().refine((v) => {
+      if (v === null || v === undefined) return true;
       try {
         const u = new URL(v);
         return u.hostname === "localhost" || u.hostname.includes(".");
@@ -35,12 +38,12 @@ const updateClientSchema = z
         return false;
       }
     }, "Invalid website URL")),
-    address: z.preprocess(emptyToUndefined, z.string().max(300).optional()),
-    city: z.preprocess(emptyToUndefined, z.string().max(120).optional()),
-    country: z.preprocess(emptyToUndefined, z.string().max(120).optional()),
+    address: z.preprocess(emptyToNull, z.string().max(300).nullable().optional()),
+    city: z.preprocess(emptyToNull, z.string().max(120).nullable().optional()),
+    country: z.preprocess(emptyToNull, z.string().max(120).nullable().optional()),
     tags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
-    notes: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
-    assignedToId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
+    notes: z.preprocess(emptyToNull, z.string().max(5000).nullable().optional()),
+    assignedToId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
     isActive: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });

@@ -15,23 +15,26 @@ const idSchema = z.string().uuid();
 const emptyToUndefined = (v: unknown) =>
   typeof v === "string" && v.trim() === "" ? undefined : (typeof v === "string" ? v.trim() : v);
 
+const emptyToNull = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? null : (typeof v === "string" ? v.trim() : v);
+
 const updateInvoiceSchema = z
   .object({
-    invoiceNumber: z.preprocess(emptyToUndefined, z.string().min(1).max(60).optional()),
+    invoiceNumber: z.string().trim().min(1).max(60).optional(),
     status: z.preprocess(emptyToUndefined, z.enum(STATUSES).optional()),
-    issueDate: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
-    dueDate: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
-    paidAt: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
+    issueDate: z.preprocess(emptyToNull, z.string().datetime().nullable().optional()),
+    dueDate: z.preprocess(emptyToNull, z.string().datetime().nullable().optional()),
+    paidAt: z.preprocess(emptyToNull, z.string().datetime().nullable().optional()),
     subtotal: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
     taxRate: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
     taxAmount: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
     discount: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
     total: z.preprocess(emptyToUndefined, z.union([z.string().trim(), z.number()]).optional()),
-    currency: z.preprocess(emptyToUndefined, z.string().min(3).max(3).optional()),
-    notes: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
-    terms: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
-    clientId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
-    projectId: z.preprocess(emptyToUndefined, z.string().uuid().optional()),
+    currency: z.preprocess(emptyToNull, z.string().min(3).max(3).nullable().optional()),
+    notes: z.preprocess(emptyToNull, z.string().max(5000).nullable().optional()),
+    terms: z.preprocess(emptyToNull, z.string().max(5000).nullable().optional()),
+    clientId: z.string().uuid().optional(),
+    projectId: z.preprocess(emptyToNull, z.string().uuid().nullable().optional()),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
 
@@ -92,7 +95,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (input.total !== undefined) {
       updates.total = input.total === "" ? "0" : String(input.total);
     }
-    if (input.currency !== undefined) updates.currency = input.currency.toUpperCase();
+    if (input.currency !== undefined) updates.currency = input.currency ? input.currency.toUpperCase() : null;
     if (input.notes !== undefined) updates.notes = input.notes || null;
     if (input.terms !== undefined) updates.terms = input.terms || null;
     if (input.clientId !== undefined) updates.clientId = input.clientId;
